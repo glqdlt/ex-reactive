@@ -2,9 +2,11 @@ package com.glqdlt.ex.reactive;
 
 import org.junit.Assert;
 import org.junit.Test;
+import reactor.core.publisher.ConnectableFlux;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -54,4 +56,51 @@ public class SpringReactorTest {
         Assert.assertEquals(TestDummyStub.EXAMPLE_1_STUB, zxc.block());
     }
 
+    /**
+     * 리액터는 핫 시퀀스와 콜드 시퀀스에 따라 개념이 달라진다. 참고로 자바 stream api는 콜드 시퀀스와 개념이 같다.
+     * 핫 시퀀스와 콜드 시퀀스의 차이는 Push 방법이냐 pull 방법이냐이다.
+     * 핫은 Push 방법이고, 콜드는 Pull 방법이다. 2개의 차이는 아래와 같다.
+     * Push 개념은 텔레비전과 같다. TV 전원을 키는 순간 부터 방송되고 있던 부분부터 영상이 출력된다.
+     * 반면, Pull 개념은 유튜브 OTT와 같다. 유튜브는 내가 클릭하는 순간 영상을 처음부터 볼수있다.
+     * 즉 차이는 Push 개념은 영상 수신자 의 상태와는 상관없이 일방적으로 밀어넣는 즉 PUSH 이고,
+     * Pull 은 내가 원할때 받아보는 개념이다.
+     * 콜과 핫을 구분하는 가장 기초적인 개념은 connect() 를 지원하냐 차이이다.
+     * 아래 예제는 핫 시퀀스에 대한 테스트이다.
+     * A 와 B 유저가 있고, A 유저가 먼저 connect()를 호출해서 해당 스트림의 시작을 알린다.
+     * 이후 10초 후에 유저 B가 subscribe 하면 10초후의 데이터는 NO-10 이후 부터 수신이 되는 것을 알수가 있다.
+     */
+    @Test
+    public void hotTest() throws InterruptedException {
+
+        ConnectableFlux<String> aaa = Flux.interval(Duration.ofSeconds(1))
+                .map(x -> "NO-" + x)
+                .publish();
+        aaa.subscribe((x) -> System.out.println(String.format("[A] %s", x)));
+        aaa.connect();
+        Thread.sleep(Duration.ofSeconds(10).toMillis());
+
+        aaa.subscribe((x) -> System.out.println(String.format("[B] %s", x)));
+
+        Thread.sleep(Duration.ofMinutes(1).toMillis());
+
+    }
+
+    /**
+     * 반면 콜드 테스트의 경우, 10초후에 B가 구독을 했음에도 NO-0 최초의 데이터부터 가져오는 것을 알수가 있다.
+     * Push 방식의 경우 송신자 입장에서 원 데이터는 소비하고 지우면 되나, Pull 방식의 경우에는 송신자 입장에서 데이터를 계속 관리를 해야하는 부담감이 생긴다.
+     * 여기서 관리란 원본 데이터를 보관하는 방법도 있지만, 얼마나 많은 인원이 이를 Pull 당겨갈지의 기준처럼.. 무한정으로 보관할지 말지에 대한 관리도 필요하다.
+     */
+    @Test
+    public void coldTest() throws InterruptedException {
+        Flux<String> aaa = Flux.interval(Duration.ofSeconds(1))
+                .map(x -> "NO-" + x);
+
+        aaa.subscribe((x) -> System.out.println(String.format("[A] %s", x)));
+        Thread.sleep(Duration.ofSeconds(10).toMillis());
+
+        aaa.subscribe((x) -> System.out.println(String.format("[B] %s", x)));
+
+        Thread.sleep(Duration.ofMinutes(1).toMillis());
+
+    }
 }
