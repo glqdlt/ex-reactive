@@ -2,13 +2,18 @@ package com.glqdlt.ex.reactive;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.reactivestreams.Subscriber;
+import org.reactivestreams.Subscription;
 import reactor.core.publisher.ConnectableFlux;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
+import reactor.core.publisher.SynchronousSink;
 
 import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
+import java.util.Random;
+import java.util.function.Consumer;
 
 /**
  * 스프링 리액터의 특징은 배압(backPresure)를 지원한다. 벡프레셔는 흐름의 강약을 조절한다,
@@ -102,5 +107,77 @@ public class SpringReactorTest {
 
         Thread.sleep(Duration.ofMinutes(1).toMillis());
 
+    }
+
+    /**
+     * push 냐 pull 이냐에 따른 개념은, request(n) 에서 n의 값이
+     *
+     * @throws InterruptedException
+     */
+    @Test
+    public void pullMode() throws InterruptedException {
+        Flux<Integer> zzz = Flux.range(1, 100000);
+        zzz.subscribe(new Subscriber<Integer>() {
+            private Subscription subscription;
+
+            /**
+             * 최초로 구독을 하게 되면 init() 되는 메소드이다.
+             * @param s 송신자와 수신자 간의 이벤트를 연결하는 매개 이다.
+             */
+            @Override
+            public void onSubscribe(Subscription s) {
+                this.subscription = s;
+                this.subscription.request(3);
+            }
+
+            /**
+             * 송신자가 다음 데이터를 넘겨줄때, 호출이 된다.
+             * onNext()의 조건은 subscipriotn.request(n) 를 호출하게 되면 인자로 넘어가는 n 값의 갯수만큼 onNext()를 호출한다.
+             * @param aLong 송신자로 부터 전달 받은 데이터이다
+             */
+            @Override
+            public void onNext(Integer aLong) {
+                System.out.println(aLong);
+//               사실상 아래 호출은 call 개념이다.
+                this.subscription.request(1);
+            }
+
+            /**
+             * 송신자 내부에서 에러가발생했을떄 #onError()가 호출된다.
+             * @param t
+             */
+            @Override
+            public void onError(Throwable t) {
+                System.out.println(t.getMessage());
+            }
+
+            /**
+             * 송신자가 자신의 데이터의 끝이 도달했을 때 #onComplete() 를 호출한다.
+             */
+            @Override
+            public void onComplete() {
+                System.out.println("compelete");
+
+            }
+        });
+        Thread.sleep(Duration.ofMinutes(1).toMillis());
+    }
+
+    @Test
+    public void pullMode2() {
+        Flux<Object> aaa = Flux.generate(new Consumer<SynchronousSink<Object>>() {
+            private Integer emit = 0;
+            private Random random = new Random();
+
+            @Override
+            public void accept(SynchronousSink<Object> objectSynchronousSink) {
+                emit++;
+                objectSynchronousSink.next(random.nextInt());
+                if (emit > 10) {
+                    objectSynchronousSink.complete();
+                }
+            }
+        });
+        aaa.subscribe((x) -> System.out.println(x));
     }
 }
